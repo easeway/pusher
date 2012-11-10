@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# The Pusher Agent Bootstrap
+
+# Check environment
+log() {
+    local level=$1
+    shift
+    logger -p deamon.$level "$@"
+}
+
+if ![ -d "$PUSHER_ADDON_HOME" ] || [ -z "$PUSHER_ADDON_NAME" ]; then
+    log error "Bad Pusher Agent environment"
+    exit 1
+fi
+
+# Setup environment
+export PUSHER_HOME="$PUSHER_EXEC_BASE/current"
+mkdir -p "$PUSHER_HOME"
+
+source "$PUSHER_ADDON_HOME/lib/functions.sh"
+
+version_switch() {
+    local curr_ver=$(extract_val '^VERSION=(.+)$' "$PUSHER_HOME/bootstrap/version")
+
+    export PUSHER_ADDON_NAME=bootstrap
+    export PUSHER_ADDON_BASE="$PUSHER_BOOTSTRAP"
+
+    if [ -n "$curr_ver" ] && [ -x "$PUSHER_HOME/bootstrap/start" ]; then
+        local response=$(request GET "bootstrap/validate_version?version=${curr_ver}")
+        if [ "$response" == "OK" ]; then
+            unset PUSHER_BOOTSTRAP
+            export PUSHER_ADDON_BASE="$PUSHER_HOME/bootstrap"
+            exec "$PUSHER_ADDON_BASE/start"
+        fi
+    fi
+}
+
+# Try version switching
+[ -n "$PUSHER_BOOTSTRAP" ] && version_switch
+
+[ -f "$PUSHER_CONF_BASE/pusher.conf" ] && source "$PUSHER_CONF_BASE/pusher.conf"
+if [ -z "$PUSHER_SERVER" ]; then
+    log error "No Pusher server available, abort"
+    exit 1
+fi
+
+for module in action_dispatcher addons_manager; do
+    source "$PUSHER_ADDON_HOME/lib/${module}.sh"
+done
+
+addons_apply_upgrades
+actions_process

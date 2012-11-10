@@ -1,0 +1,41 @@
+#!/bin/bash
+
+RUN_BASE=$(dirname "$0")
+[ "${RUN_BASE:0:1}" == "/" ] || RUN_BASE="$PWD/$RUN_BASE"
+
+TESTS_LIB_DIR="$RUN_BASE/lib"
+TESTS_SRC_DIR="$1"
+[ -z "$TESTS_SRC_DIR" ] && TESTS_SRC_DIR="$PWD"
+[ "${TESTS_SRC_DIR:0:1}" == "/" ] || TESTS_SRC_DIR="$PWD/$TESTS_SRC_DIR"
+
+[ -z "$TESTS_WORK_DIR" ] && TESTS_WORK_DIR=/tmp/tests-$$
+mkdir -p "$TESTS_WORK_DIR"
+
+export ${!TESTS_@}
+
+TEST_PASS_COUNT=0
+TEST_FAIL_COUNT=0
+for script in $(find "$TESTS_SRC_DIR" -name '*-test.sh' -type f); do
+    TEST_LOG="$TESTS_WORK_DIR/$(basename $script).log"
+    echo "LOAD $script"
+    TEST_CASES=$("$BASH" "$RUN_BASE/bin/tests_container.sh" list "$script")
+    for name in $TEST_CASES ; do
+        echo -n "TEST $name ... "
+        "$BASH" -x "$RUN_BASE/bin/tests_container.sh" run "$script" $name >>"$TEST_LOG" 2>&1
+        if [ $? -eq 0 ]; then
+            echo "PASS"
+            TEST_PASS_COUNT=$((TEST_PASS_COUNT+1))
+        else
+            echo "FAIL"
+            TEST_FAIL_COUNT=$((TEST_FAIL_COUNT+1))
+        fi
+    done
+    [ $? -eq 0 ] || FAILURES=$((FAILURES+1))
+done
+
+echo
+echo "Passed cases: $TEST_PASS_COUNT"
+echo "Failed cases: $TEST_FAIL_COUNT"
+echo
+
+[ $TEST_FAIL_COUNT -eq 0 ] || exit 1

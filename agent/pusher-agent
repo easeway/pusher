@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# This is the Agent entrance script launched by cron on the distributed system
+# The simple task for this script is to load bootstrap
+
+# Here is the basic environments
+PUSHER_CONF_BASE=/etc/pusher
+PUSHER_CACHE_BASE=/var/cache/pusher
+PUSHER_EXEC_BASE=/var/lib/pusher
+PUSHER_LIB_BASE=/usr/lib/pusher
+PUSHER_ENV_BASE=/var/run/pusher
+
+[ -f "/etc/default/pusher" ] && source "/etc/default/pusher"
+[ -n "$PUSHER_CONF" && -f "$PUSHER_CONF" ] && source "$PUSHER_CONF"
+
+# Helper functions
+log() {
+    local level=$1
+    shift
+    logger -p deamon.$level "$@"
+}
+
+# Entry
+if [ -z "$PUSHER_CLIENT_ID" ]; then
+    log error "Unknown client identifier"
+    exit 1
+fi
+
+PUSHER_BOOTSTRAP="$PUSHER_LIB_BASE/addons/bootstrap"
+PUSHER_ADDON_NAME=bootstrap
+PUSHER_ADDON_HOME="$PUSHER_BOOTSTRAP"
+
+for name in ${!PUSHER_@}; do
+    export $name
+done
+
+[ -x "$PUSHER_BOOTSTRAP/start" ] && exec "$PUSHER_BOOTSTRAP/start"
+log error "Unable to start Pusher bootstrap"
+exit 1
